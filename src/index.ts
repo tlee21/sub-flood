@@ -1,14 +1,14 @@
-import {Keyring} from "@polkadot/keyring";
-import {ApiPromise, WsProvider} from "@polkadot/api";
-import {KeyringPair} from "@polkadot/keyring/types";
-import { SignedBlock, BlockHash, BlockAttestations } from "@polkadot/types/interfaces";
+// import { Keyring } from "@polkadot/keyring";
+// import { KeyringPair } from "@polkadot/keyring/types";
+// import { BlockHash } from "@polkadot/types/interfaces";
+import { Api, Testing, Util } from "@aetheras/agencejs";
 
 
 function seedFromNum(seed: number): string {
     return '//user//' + ("0000" + seed).slice(-4);
 }
 
-async function getBlockStats(api: ApiPromise, hash?: BlockHash | undefined): Promise<any> {
+async function getBlockStats(api: any, hash?: any | undefined): Promise<any> {
     const signedBlock = hash ? await api.rpc.chain.getBlock(hash) : await api.rpc.chain.getBlock();
 
     // the hash for each extrinsic in the block
@@ -32,7 +32,7 @@ async function run() {
     let TOTAL_TRANSACTIONS = argv.total_transactions ? argv.total_transactions : 25000;
     let TPS = argv.scale ? argv.scale : 100;
     let TOTAL_THREADS = argv.total_threads ? argv.total_threads : 10;
-    let TOTAL_BATCHES = TOTAL_TRANSACTIONS/TPS;
+    let TOTAL_BATCHES = TOTAL_TRANSACTIONS / TPS;
     let TRANSACTION_PER_BATCH = TPS / TOTAL_THREADS;
     let WS_URL = argv.url ? argv.url : "ws://localhost:9944";
     let TOTAL_USERS = TPS;
@@ -42,17 +42,18 @@ async function run() {
     let FINALISATION_TIMEOUT = argv.finalization_timeout ? argv.finalization_timeout : 20000; // 20 seconds
     let FINALISATION_ATTEMPTS = argv.finalization_attempts ? argv.finalization_attempts : 5;
 
-    let provider = new WsProvider(WS_URL);
+    let provider = new Api.WsProvider(WS_URL);
 
-    let apiRequest = await Promise.race([
-        ApiPromise.create({provider}),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 3000))
-    ]).catch(function(err) {
-        throw Error(`Timeout error: ` + err.toString());
-    });
-    let api = apiRequest as ApiPromise;
+    // let api = await Promise.race([
+    //     Api.create(WS_URL),
+    //     new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 3000))
+    // ]).catch(function (err) {
+    //     throw Error(`Timeout error: ` + err.toString());
+    // });
 
-    let keyring = new Keyring({type: 'sr25519'});
+    const api = await Api.createReady(WS_URL);
+
+    const keyring = Testing.testKeyRing();
 
     let nonces = [];
 
@@ -66,9 +67,10 @@ async function run() {
     console.log("All nonces fetched!");
 
     console.log("Endowing all users from Alice account...");
-    let aliceKeyPair = keyring.addFromUri("//Alice");
+    let aliceKeyPair = keyring.getPairs()[0]; //keyring.addFromUri("//Alice");
+
     let aliceNonce = (await api.query.system.account(aliceKeyPair.address)).nonce.toNumber();
-    let keyPairs = new Map<number, KeyringPair>()
+    let keyPairs = new Map<number, any>()
     console.log("Alice nonce is " + aliceNonce);
 
     let finalized_transactions = 0;
@@ -89,7 +91,7 @@ async function run() {
                 finalized_transactions++;
             }
         });
-        aliceNonce ++;
+        aliceNonce++;
     }
     console.log("All users endowed from Alice account!");
 
@@ -106,15 +108,15 @@ async function run() {
     var sanityCounter = 0;
     for (let thread = 0; thread < TOTAL_THREADS; thread++) {
         let batches = [];
-        for (var batchNo = 0; batchNo < TOTAL_BATCHES; batchNo ++) {
+        for (var batchNo = 0; batchNo < TOTAL_BATCHES; batchNo++) {
             let batch = [];
-            for (var userNo = thread * USERS_PER_THREAD; userNo < (thread+1) * USERS_PER_THREAD; userNo++) {
+            for (var userNo = thread * USERS_PER_THREAD; userNo < (thread + 1) * USERS_PER_THREAD; userNo++) {
                 let nonce = nonces[userNo];
-                nonces[userNo] ++;
+                nonces[userNo]++;
                 let senderKeyPair = keyPairs.get(userNo)!;
 
                 let transfer = api.tx.balances.transfer(aliceKeyPair.address, TOKENS_TO_SEND);
-                let signedTransaction = transfer.sign(senderKeyPair, {nonce});
+                let signedTransaction = transfer.sign(senderKeyPair, { nonce });
 
                 batch.push(signedTransaction);
 
@@ -182,10 +184,10 @@ async function run() {
     console.log(`latest block: ${latest_block.date}`);
     console.log(`initial time: ${initialTime}`);
     let prunedFlag = false;
-    for (; latest_block.date > initialTime; ) {
+    for (; latest_block.date > initialTime;) {
         try {
             latest_block = await getBlockStats(api, latest_block.parent);
-        } catch(err) {
+        } catch (err) {
             console.log("Cannot retrieve block info with error: " + err.toString());
             console.log("Most probably the state is pruned already, stopping");
             prunedFlag = true;
@@ -194,7 +196,7 @@ async function run() {
         if (latest_block.date < finalTime) {
             console.log(`block number ${latest_block.blockNumber}: ${latest_block.transactions} transactions`);
             total_transactions += latest_block.transactions;
-            total_blocks ++;
+            total_blocks++;
         }
     }
 
@@ -224,10 +226,10 @@ async function run() {
     }
 }
 
-run().then(function() {
+run().then(function () {
     console.log("Done");
     process.exit(0);
-}).catch(function(err) {
+}).catch(function (err) {
     console.log("Error: " + err.toString());
     process.exit(1);
 });
