@@ -80,7 +80,7 @@ async function run() {
         keyPairs.set(seed, keypair);
 
         // should be greater than existential deposit.
-        let transfer = api.tx.balances.transfer(keypair.address, 10 * api.consts.balances.existentialDeposit.toNumber());
+        let transfer = api.tx.balances.transfer(keypair.address, 10n * api.consts.balances.existentialDeposit.toBigInt());
 
         let receiverSeed = seedFromNum(seed);
         console.log(
